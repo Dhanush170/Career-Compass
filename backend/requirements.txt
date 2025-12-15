@@ -1,0 +1,10 @@
+fastapi
+uvicorn
+python-multipart
+sentence-transformers
+keybert
+google-generativeai
+llmwhisperer-client
+scikit-learn
+numpy
+python-dotenv
