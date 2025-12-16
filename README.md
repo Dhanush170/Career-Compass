@@ -30,7 +30,7 @@ Follow these steps to set up the project locally.
 ### 2\. Clone the Repository
 
 ```bash
-git clone https://github.com/yourusername/career-compass.git
+git clone https://github.com/Dhanush170/career-compass.git
 cd career-compass
 ```
 
