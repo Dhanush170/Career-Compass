@@ -1,17 +1,11 @@
-Here is a clean, professional, and "crispy" `README.md` file for your repository.
-
-You can copy and paste this directly into your project root.
-
------
-
 # 🧭 Career Compass
 
 **Career Compass** is a full-stack AI application that bridges the gap between human potential and algorithmic gatekeepers. It doesn't just grade resumes; it provides a comprehensive career intelligence analysis, including ATS scoring, role fit prediction, and personalized upskilling paths.
 
 ## 🚀 Key Features
 
-  * **Hybrid Scoring Engine:** Combines SBERT (Math) & Gemini 2.5 (Cognitive) for accurate scoring.
-  * **Gap Analysis:** Identifies missing hard skills vs. "noise."
+  * **Hybrid Scoring Engine:** Combines KEYBERT (Math) & Gemini 2.5 (Cognitive) for accurate scoring.
+  * **Gap Analysis:** Identifies missing hard skills vs. "noise"
   * **Automated Upskilling:** Generates tailored learning paths and resume bullet point boosters.
   * **Mega-Prompt Architecture:** Optimized backend for single-pass analysis (No rate limits).
 
@@ -63,7 +57,7 @@ source venv/bin/activate
 **Install Dependencies:**
 
 ```bash
-pip install fastapi uvicorn python-multipart sentence-transformers keybert google-generativeai llmwhisperer-client scikit-learn numpy python-dotenv
+pip install -r requirements.txt
 ```
 
 **Configure Secrets:**
@@ -111,10 +105,3 @@ npm run dev
 3.  Upload your **Resume (PDF)** in the right box.
 4.  Click **"Analyze My Fit"**.
 
-## 🤝 Contributing
-
-Pull requests are welcome. For major changes, please open an issue first to discuss what you would like to change.
-
------
-
-*Built with ❤️ by [Your Name]*
