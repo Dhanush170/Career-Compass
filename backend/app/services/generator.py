@@ -2,6 +2,7 @@
 
 import json
 import time
+import re  # Added for better cleaning
 import google.generativeai as genai
 from typing import Dict, Any, List, Optional, Tuple
 from app.config import GOOGLE_API_KEY
@@ -15,14 +16,32 @@ def get_raw_llm_response(prompt):
     response = llm_model.generate_content(prompt)
     return response.text
 
+def _clean_json_text(text: str) -> str:
+    """Removes markdown code blocks and whitespace."""
+    # Remove ```json and ```
+    text = re.sub(r"```json\s*", "", text, flags=re.IGNORECASE)
+    text = re.sub(r"```", "", text)
+    return text.strip()
+
 def _safe_json_loads(text: str) -> Tuple[Optional[Dict[str, Any]], Optional[str]]:
+    # 1. Clean Markdown
+    cleaned_text = _clean_json_text(text)
+    
+    # 2. Try Direct Parse
     try:
-        return json.loads(text), None
+        return json.loads(cleaned_text), None
     except:
-        start, end = text.find("{"), text.rfind("}")
-        if start != -1 and end != -1:
-            try: return json.loads(text[start:end+1]), None
-            except: pass
+        pass
+
+    # 3. Try finding outer braces
+    start = cleaned_text.find("{")
+    end = cleaned_text.rfind("}")
+    if start != -1 and end != -1:
+        try:
+            return json.loads(cleaned_text[start:end+1]), None
+        except:
+            pass
+            
     return None, text
 
 def _call_llm_with_retry(prompt: str, retries: int = 2) -> Tuple[Optional[Dict], str]:
@@ -42,7 +61,7 @@ def _call_llm_with_retry(prompt: str, retries: int = 2) -> Tuple[Optional[Dict],
 def predict_roles_llm(resume_text: str, jd_text: str = None) -> Dict:
     prompt = f"""
     CONTEXT:
-    RESUME: {resume_text}
+    RESUME: {resume_text[:4000]}
     
     TASK: Output top 3 predicted roles for this candidate. The reason should be in 1-2 lines.
     RETURN JSON ONLY:
@@ -56,6 +75,10 @@ def predict_roles_llm(resume_text: str, jd_text: str = None) -> Dict:
     return {"predicted_roles": parsed.get("predicted_roles", []) if parsed else [], "raw": raw}
 
 def estimate_skill_levels_llm(resume_text: str, skills: List[str]) -> Dict:
+    # Fallback if no skills provided
+    if not skills:
+        skills = ["Communication", "Problem Solving", "Technical Skills"]
+
     prompt = f"""
     RESUME: {resume_text[:3000]}
     SKILLS: {json.dumps(skills)}
@@ -71,11 +94,21 @@ def estimate_skill_levels_llm(resume_text: str, skills: List[str]) -> Dict:
     return {"skill_levels": parsed.get("skill_levels", []) if parsed else [], "raw": raw}
 
 def generate_booster_snippets_llm(resume_text: str, jd_text: str, missing_skills: List[str]) -> Dict:
+    # CRITICAL FIX: If no missing skills, ask to improve generic areas
+    is_generic = False
+    if not missing_skills:
+        missing_skills = ["Advanced Optimization", "System Design", "Leadership"]
+        is_generic = True
+
     prompt = f"""
     RESUME: {resume_text[:3000]}
     JD: {jd_text[:2000]}
-    MISSING: {json.dumps(missing_skills)}
-    TASK: Create resume bullet points for missing skills. If not in resume, mark derived_from_resume=false.
+    MISSING_SKILLS: {json.dumps(missing_skills)}
+    
+    TASK: Create resume bullet points for the MISSING_SKILLS.
+    If the resume has NO evidence for a skill, mark 'derived_from_resume': false.
+    {"Note: These are generic improvements." if is_generic else ""}
+    
     RETURN JSON ONLY:
     {{
       "booster_suggestions": [
@@ -87,10 +120,13 @@ def generate_booster_snippets_llm(resume_text: str, jd_text: str, missing_skills
     return {"booster_suggestions": parsed.get("booster_suggestions", []) if parsed else [], "raw": raw}
 
 def build_learning_path_llm(role: str, missing: List[str]) -> Dict:
+    # CRITICAL FIX: If missing list is empty, default to general role improvement
+    context_str = json.dumps(missing) if missing else "General Advanced Skills"
+
     prompt = f"""
     ROLE: {role}
-    MISSING: {json.dumps(missing)}
-    TASK: Create a 5-step learning path.
+    FOCUS_AREAS: {context_str}
+    TASK: Create a 5-step learning path to master this role and gaps.
     RETURN JSON ONLY:
     {{
       "learning_path": [
@@ -122,13 +158,19 @@ def run_all_and_normalize(resume_text: str, jd_text: str, missing_skills: List[s
     roles = roles_data.get("predicted_roles", [])
     primary_role = roles[0]["role"] if roles else "Software Engineer"
     
-    # 2. Skill Levels (Top 15 skills from resume or matched)
+    # 2. Skill Levels 
+    # Logic: Combine matched skills from prediction + missing skills to get a good mix
     skills_to_check = []
-    for r in roles: skills_to_check.extend(r.get("matched_skills", []))
-    skills_to_check = list(set(skills_to_check))[:15]
+    for r in roles: 
+        skills_to_check.extend(r.get("matched_skills", []))
+    
+    # Cap skills to check to avoid huge prompt
+    skills_to_check = list(set(skills_to_check))[:10]
+    # If empty, use defaults inside the function
     levels_data = estimate_skill_levels_llm(resume_text, skills_to_check)
     
     # 3. Boosters
+    # Pass missing skills; function handles empty list logic
     boosters_data = generate_booster_snippets_llm(resume_text, jd_text, missing_skills[:5])
     
     # 4. Learning
@@ -150,7 +192,7 @@ def build_ui_payload(combined: Dict) -> Dict:
     roles = combined.get("predicted_roles", [])
     return {
         "roles": roles,
-        "primary_role": roles[0]["role"] if roles else "Software Engineer ",
+        "primary_role": roles[0]["role"] if roles else "Software Engineer",
         "skill_levels": combined.get("skill_levels", []),
         "booster_suggestions": combined.get("booster_suggestions", []),
         "learning_path": combined.get("learning_path", []),
